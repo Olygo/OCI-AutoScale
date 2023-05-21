@@ -405,7 +405,7 @@ def autoscale_region(region):
     # Find all resources with a Schedule Tag
     ###############################################
     MakeLog("Getting all resources supported by the search function...")
-    query = "query all resources where (definedTags.namespace = '{}')".format(PredefinedTag)
+    query = "query {} resources where (definedTags.namespace = '{}')".format(', '.join(supported_resources), PredefinedTag)
     query += " && compartmentId  = '" + compartment_include + "'" if compartment_include else ""
     query += " && compartmentId != '" + compartment_exclude + "'" if compartment_exclude else ""
     sdetails = oci.resource_search.models.StructuredSearchDetails()
@@ -457,7 +457,7 @@ def autoscale_region(region):
             MakeLog(".", True)
 
             for mysql_instance in mysql_instances:
-                if PredefinedTag not in mysql_instance.defined_tags or mysql_instance.lifecycle_state != "ACTIVE":
+                if PredefinedTag not in mysql_instance.defined_tags:
                     continue
 
                 summary = oci.resource_search.models.ResourceSummary()
@@ -492,9 +492,9 @@ def autoscale_region(region):
         # The search data is not always updated. Get the tags from the actual resource itself, not using the search data.
         resourceOk = False
         if cmd.print_ocid:
-            MakeLog("Checking {} ({}) - {}...".format(resource.display_name, resource.resource_type, resource.identifier))
+            MakeLog("Checking {} ({}) - {}, CurrentState: {}...".format(resource.display_name, resource.resource_type, resource.identifier, resource.lifecycle_state))
         else:
-            MakeLog("Checking {} ({})...".format(resource.display_name, resource.resource_type))
+            MakeLog("Checking {} ({}) CurentState: {}...".format(resource.display_name, resource.resource_type, resource.lifecycle_state))
 
         try:
             if resource.resource_type == "Instance":
@@ -1606,6 +1606,21 @@ success = []
 errors = []
 total_resources = 0
 ErrorsFound = False
+supported_resources = [
+        "instance",
+        "instancepool",
+        "dbsystem",
+        "vmcluster",
+        "cloudexadatainfrastructure",
+        "autonomousdatabase",
+        "odainstance",
+        "analyticsinstance",
+        "integrationinstance",
+        "loadbalancer",
+        "goldengatedeployment",
+        "disworkspace",
+        "visualbuilderinstance"
+        ]
 
 ############################################
 # Loop on all regions
@@ -1687,9 +1702,4 @@ if cmd.log:
     putlogdetails.log_entry_batches = [logdetails]
 
     result = logingest.put_logs(log_id=cmd.log, put_logs_details=putlogdetails)
-
-
-
-
-
 
