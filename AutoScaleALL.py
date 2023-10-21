@@ -22,6 +22,7 @@
 #   -printocid - print ocid of object
 #   -topic     - topic to sent summary
 #   -log       - send log output to OCI Logging service. Specify the Log OCID
+#   -ot        - override schedule based on a tag
 #   -h         - help
 #
 #################################################################################################################
@@ -45,6 +46,7 @@ Weekend = "Weekend"
 WeekDay = "WeekDay"
 DayOfMonth = "DayOfMonth"
 Version = "2022.11.05"
+Override = "Override"
 
 # ============== CONFIGURE THIS SECTION ======================
 # OCI Configuration
@@ -411,13 +413,14 @@ def autoscale_region(region):
     sdetails = oci.resource_search.models.StructuredSearchDetails()
     sdetails.query = query
 
+
     NoError = True
 
     try:
         result = oci.pagination.list_call_get_all_results(search.search_resources,
                                                           sdetails,
                                                           **{
-                                                              "limit": 1000
+                                                              "limit": 10
                                                           }).data
     except oci.exceptions.ServiceError as response:
         print ("Error: {} - {}".format(response.code, response.message))
@@ -536,6 +539,10 @@ def autoscale_region(region):
             if resource.resource_type == "VisualBuilderInstance":
                 resourceDetails = visualbuilder.get_vb_instance(vb_instance_id=resource.identifier, retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY).data
                 resourceOk = True
+            if resource.resource_type == "CloudVmCluster":
+                resourceDetails = database.get_cloud_vm_cluster(cloud_vm_cluster_id=resource.identifier, retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY).data
+                resourceOk = True
+
         except:
             MakeLog("Skipping resource, information can not be found")
             resourceOk = False
@@ -575,6 +582,15 @@ def autoscale_region(region):
                     if int(day) == CurrentDayOfMonth:
                         ActiveSchedule = ("{},".format(schedulesize)*24)[:-1]
 
+            if cmd.override:
+                if Override in schedule:
+                    ResourceOverrideTag = schedule[Override]
+                    if cmd.override == "All" or cmd.override == ResourceOverrideTag:
+                        if cmd.action == "Up":
+                            ActiveSchedule = "1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1"
+                        if cmd.action == "Down":
+                            ActiveSchedule = "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
+            
             #################################################################
             # Check if the active schedule contains exactly 24 numbers for each hour of the day
             #################################################################
@@ -785,7 +801,7 @@ def autoscale_region(region):
                                                     Retry = False
 
                         ###################################################################################
-                        # Exadata
+                        # Exadata (Old exadata shape)
                         ###################################################################################
                         if resourceDetails.shape[:7] == "Exadata":
                             if resourceDetails.cpu_core_count > int(schedulehours[CurrentHour]):
@@ -830,6 +846,52 @@ def autoscale_region(region):
                                                 errors.append(" - Error ({}) Exadata DB Scale Up from {} to {} for {} - {}".format(response.status, resourceDetails.cpu_core_count, int(schedulehours[CurrentHour]), resource.display_name, response.message))
                                                 MakeLog(" - Error ({}) Exadata DB Scale Up from {} to {} for {} - {}".format(response.status, resourceDetails.cpu_core_count, int(schedulehours[CurrentHour]), resource.display_name, response.message))
                                                 Retry = False
+
+                    ###################################################################################
+                    # Exadata - VM Cluster
+                    ###################################################################################
+                    if resource.resource_type == "CloudVmCluster":
+                        if resourceDetails.cpu_core_count > int(schedulehours[CurrentHour]):
+                            if Action == "All" or Action == "Down":
+                                MakeLog(" - Initiate Exadata VM Cluster Scale Down from {} to {} for {}".format(resourceDetails.cpu_core_count, int(schedulehours[CurrentHour]), resource.display_name))
+                                dbupdate = oci.database.models.UpdateCloudVmClusterDetails()
+                                dbupdate.cpu_core_count = int(schedulehours[CurrentHour])
+                                Retry = True
+                                while Retry:
+                                    try:
+                                        response = database.update_cloud_vm_cluster(cloud_vm_cluster_id=resource.identifier,update_cloud_vm_cluster_details=dbupdate)
+                                        Retry = False
+                                        success.append(" - Initiate Exadata VM Cluster Scale Down to {} at {} for {}".format(resourceDetails.cpu_core_count, int(schedulehours[CurrentHour]), resource.display_name))
+                                    except oci.exceptions.ServiceError as response:
+                                        if response.status == 429:
+                                            MakeLog("Rate limit kicking in.. waiting {} seconds...".format(RateLimitDelay))
+                                            time.sleep(RateLimitDelay)
+                                        else:
+                                            ErrorsFound = True
+                                            errors.append(" - Error ({}) Exadata VM Cluster Scale Down from {} to {} for {} - {}".format(response.status, resourceDetails.cpu_core_count, int(schedulehours[CurrentHour]), resource.display_name, response.message))
+                                            MakeLog(" - Error ({}) Exadata VM Cluster Scale Down from {} to {} for {} - {}".format(response.status, resourceDetails.cpu_core_count, int(schedulehours[CurrentHour]), resource.display_name, response.message))
+                                            Retry = False
+
+                        if resourceDetails.cpu_core_count < int(schedulehours[CurrentHour]):
+                            if Action == "All" or Action == "Up":
+                                MakeLog(" - Initiate Exadata VM Cluster Scale UP from {} to {} for {}".format(resourceDetails.cpu_core_count, int(schedulehours[CurrentHour]), resource.display_name))
+                                dbupdate = oci.database.models.UpdateCloudVmClusterDetails()
+                                dbupdate.cpu_core_count = int(schedulehours[CurrentHour])
+                                Retry = True
+                                while Retry:
+                                    try:
+                                        response = database.update_cloud_vm_cluster(cloud_vm_cluster_id=resource.identifier,update_cloud_vm_cluster_details=dbupdate)
+                                        Retry = False
+                                        success.append(" - Initiate Exadata VM Cluster Scale UP from {} to {} for {}".format(resourceDetails.cpu_core_count, int(schedulehours[CurrentHour]), resource.display_name))
+                                    except oci.exceptions.ServiceError as response:
+                                        if response.status == 429:
+                                            MakeLog("Rate limit kicking in.. waiting {} seconds...".format(RateLimitDelay))
+                                            time.sleep(RateLimitDelay)
+                                        else:
+                                            ErrorsFound = True
+                                            errors.append(" - Error ({}) Exadata VM Cluster Scale Up from {} to {} for {} - {}".format(response.status, resourceDetails.cpu_core_count, int(schedulehours[CurrentHour]), resource.display_name, response.message))
+                                            MakeLog(" - Error ({}) Exadata VM Cluster Scale Up from {} to {} for {} - {}".format(response.status, resourceDetails.cpu_core_count, int(schedulehours[CurrentHour]), resource.display_name, response.message))
+                                            Retry = False
 
                     ###################################################################################
                     # VmCluster
@@ -1541,6 +1603,7 @@ parser.add_argument('-ignoremysql', action='store_true', default=False, dest='ig
 parser.add_argument('-printocid', action='store_true', default=False, dest='print_ocid', help='Print OCID for resources')
 parser.add_argument('-topic', default="", dest='topic', help='Topic OCID to send summary in home region')
 parser.add_argument('-log', default="", dest='log', help='Log OCID to send log output to')
+parser.add_argument('-override', default="", dest='override', help='Override schedule based on a tag')
 
 cmd = parser.parse_args()
 if cmd.action != "All" and cmd.action != "Down" and cmd.action != "Up":
@@ -1612,6 +1675,7 @@ supported_resources = [
         "dbsystem",
         "vmcluster",
         "cloudexadatainfrastructure",
+        "cloudvmcluster",
         "autonomousdatabase",
         "odainstance",
         "analyticsinstance",

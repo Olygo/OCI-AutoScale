@@ -20,6 +20,7 @@ The **AutoScaleALL** script: A single Auto Scaling script for all OCI resources 
    -rg        - Filter on Region
    -ic        - include compartment ocid
    -ec        - exclude compartment ocid
+   -override  - Override schedule based on a tag
    -ignrtime  - ignore region time zone (Use host time)
    -printocid - print ocid of resource
    -topic     - topic OCID to sent summary (in home region)
@@ -37,6 +38,7 @@ The **AutoScaleALL** script: A single Auto Scaling script for all OCI resources 
 - Database VMs: On/Off
 - Database Baremetal Servers: Scaling (# of CPUs)
 - Database Exadata CS: Scaling (# of CPUs)*
+- Database Exadata VM Cluster: Scaling (# of CPUs)
 - Autonomous Databases: On/Off and Scaling (# of CPUs)
 - Oracle Digital Assistant: On/Off
 - Oracle Analytics Cloud: On/Off and Scaling (between 2-8 oCPU and 10-12 oCPU)
@@ -62,7 +64,7 @@ Also MySQL instances that are not running (Active state)) do not allow their tag
 # Install script into (free-tier) Autonomous Linux Instance
 Youtube demonstration video: https://youtu.be/veHbyvDB74A
 
-- Create a free-tier compute instance using the Autonomous Linux 7.8 image
+- Create a (free-tier) compute instance using the Autonomous Linux or Oracle Linux image
 - Create a Dynamic Group called Autoscaling and add the OCID of your instance to the group, using this command:
   - ANY {instance.id = 'your_OCID_of_your_Compute_Instance'}
 - Create a root level policy, giving your dynamic group permission to manage all resources in tenancy:
@@ -122,6 +124,18 @@ A specific Nth day of month schedule overwrites a normal day of the month schedu
 ![Scaling Example Instance Pool](http://oc-blog.com/wp-content/uploads/2022/06/Screenshot-2022-06-13-at-11.10.31.png)
 
 ![Power Off Example DB VM](https://oc-blog.com/wp-content/uploads/2019/06/ScaleExampleDB.png)
+
+### Override Tag
+
+There may times when you want to force a group of servers to start or stop outside a predefined schedule. This could be a group of lab servers used for training that you want to control ad-hoc. You can add a defined tag `Schedule.Override` with any value to the instances and reference them with the `-override` parameter. 
+
+For example, you have the tag `Schedule.Override: labservers` set on instances, you can start those instances using this command.
+
+```bash
+python3 AutoScaleALL.py -a Up -override labservers
+```
+
+Using the override feature, it will only do PowerOn (1) / PowerOff (0) actions, not rescale any resource.
 
 ### Changing the CPU and/or Memory Count of Compute Flex Shape
 If a value in the schedule is written as: (4:8) it will modify the CPU and Memory Count. The format should be (cpu:memory). 
