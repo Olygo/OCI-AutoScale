@@ -5,12 +5,11 @@ Welcome to the Scheduled Auto Scaling Script for OCI (Oracle Cloud Infrastructur
 The **AutoScaleALL** script: A single Auto Scaling script for all OCI resources that support scaling up/down and power on/off operations.
 
 # NEW 
+- Support for Flex Load Balancer shape, controlling the max bandwidth
 - Support for Autonomous Database ECPU and OCPU models
 - Support for changing the CPU and Memory Count for Compute Flex Shapes (WILL REBOOT THE INSTANCE!!)
 - Support for Nth day of the Month Scheuld (Like 1st saturday or 3rd Saturday)
 - Support for a Day of the Month Schedule (Like 1st of the month or 15th of the month)
-- Support running on all regions 
-- Added flags as parameters for execution:
 
 ```
    -t config  - Config file section to use (tenancy profile)
@@ -44,7 +43,8 @@ The **AutoScaleALL** script: A single Auto Scaling script for all OCI resources 
 - Oracle Digital Assistant: On/Off
 - Oracle Analytics Cloud: On/Off and Scaling (between 2-8 oCPU and 10-12 oCPU)
 - Oracle Integration Service: On/Off
-- Load Balancer: Scaling (between 10, 100, 400, 8000 Mbps)**
+- Dyamic Load Balancer: Scaling (between 10, 100, 400, 8000 Mbps)**
+- Flexible Load Balancer: Scaling the Max bandwidth to the given number
 - MySQL Service: On/Off***
 - GoldenGate: On/Off
 - Data Integration Workspaces: On/Off
@@ -94,7 +94,8 @@ A single resource can contain multiple tags. The priority of tags is as followed
 - Day of the month (Example 1 = 1st or 15 = 15th of the month)
 
 ### Values for the AnyDay, Weekday, Weekend and Day of week tags:
-The value of the tag needs to contain 24 numbers and/or wildcards (*) (else it is ignored), separated by commas. If the value is 0 it will power off the resource (if that is supported for that resource). Any number higher then 0 will re-scale the resource to that number. If the resource is powered off, it first will power-on the resource and then scale to the correct size.
+The value of the tag needs to contain 24 numbers and/or wildcards (*) (else it is ignored), separated by commas. If the value is 0 it will power off the resource (if that is supported for that resource). Any number higher then 0 will re-scale the resource to that number, 
+except for Flex Compute Shapes. To resize a Flex shape use the (cores:memory) notation. If the resource is powered off, it first will power-on the resource and then scale to the correct size.
 
 When a wild card is used, the service will stay unmodified for that hour. For example, the below schedule will turn of a compute instance in the evening/night, but allows the user to manage the state during the day.
 
